@@ -121,9 +121,141 @@ cv::Mat equalizeIntensity(const cv::Mat inputImage)
 	return cv::Mat();
 }
 
+
+cv::Mat ppmToMat(const struct ppm_file& ppmImage) {
+    cv::Mat matImage;
+
+    // Create a cv::Mat object with the specified width, height, and type
+    matImage.create(ppmImage.pheader->pheight, ppmImage.pheader->pwidth, CV_8UC3);
+
+    // Copy the pixel data from the ppm_file struct to the cv::Mat object
+    for (int y = 0; y < ppmImage.pheader->pheight; y++) {
+        for (int x = 0; x < ppmImage.pheader->pwidth; x++) {
+            // Get the RGB values of the current pixel
+            unsigned char r = ppmImage.rdata[y * ppmImage.pheader->pwidth + x];
+            unsigned char g = ppmImage.gdata[y * ppmImage.pheader->pwidth + x];
+            unsigned char b = ppmImage.bdata[y * ppmImage.pheader->pwidth + x];
+
+            // Set the RGB values in the cv::Mat object
+            matImage.at<cv::Vec3b>(y, x) = cv::Vec3b(b, g, r);
+        }
+    }
+
+    return matImage;
+}
+
+ppm_file matToPpm(const cv::Mat& image)
+{
+    ppm_file ppm;
+    ppm.pheader = new ppm_header;
+    ppm.pheader->pgmtype1 = 'P';
+    ppm.pheader->pgmtype2 = '6';
+    ppm.pheader->pwidth = image.cols;
+    ppm.pheader->pheight = image.rows;
+    ppm.pheader->pmax = 255;
+
+    int size = image.cols * image.rows;
+    ppm.rdata = new unsigned char[size];
+    ppm.gdata = new unsigned char[size];
+    ppm.bdata = new unsigned char[size];
+
+    std::vector<cv::Mat> channels;
+    cv::split(image, channels);
+
+    // Copy the pixel data from cv::Mat to ppm_file
+    for (int row = 0; row < image.rows; ++row)
+    {
+        for (int col = 0; col < image.cols; ++col)
+        {
+            int index = row * image.cols + col;
+
+            ppm.rdata[index] = channels[2].at<unsigned char>(row, col);
+            ppm.gdata[index] = channels[1].at<unsigned char>(row, col);
+            ppm.bdata[index] = channels[0].at<unsigned char>(row, col);
+        }
+    }
+
+    return ppm;
+}
+
+void open_window(cv::Mat mat){
+	cv::namedWindow("Test", cv::WINDOW_NORMAL);
+	cv::imshow("Test", mat);
+
+	cv::waitKey(0); // Wait for any keystroke in the window
+
+	cv::destroyAllWindows(); //destroy all open windows
+}
+
+void createHistogram(const ppm_file& picture)
+{
+    int histogram[3][256] = {0}; // Initialize the histogram array
+
+    int size = picture.pheader->pwidth * picture.pheader->pheight;
+    for (int i = 0; i < size; ++i)
+    {
+        unsigned char pixel = picture.rdata[i];
+        histogram[0][pixel]++;
+    }
+
+    for (int i = 0; i < size; ++i)
+    {
+        unsigned char pixel = picture.gdata[i];
+        histogram[1][pixel]++;
+    }
+
+    for (int i = 0; i < size; ++i)
+    {
+        unsigned char pixel = picture.bdata[i];
+        histogram[2][pixel]++;
+    }
+
+    FILE* file = fopen("histogram.csv", "w"); // Open the file for writing
+
+    if (file != NULL)
+    {
+        // Write the histogram data to the file
+        fprintf(file, "Red, Green, Blue\n");
+        for (int i = 0; i < 256; ++i)
+        {
+            fprintf(file, "%d, %d, %d\n", histogram[0][i], histogram[1][i], histogram[2][i]);
+        }
+
+        fclose(file); // Close the file
+        printf("Histogram data written to histogram.csv\n");
+    }
+    else
+    {
+        printf("Failed to create the histogram.csv file.\n");
+    }
+}
+
+double computeSNR(const cv::Mat& originalImage, const cv::Mat& equalizedImage)
+{
+    cv::Mat diff;
+    cv::absdiff(originalImage, equalizedImage, diff); // Compute pixel-wise absolute difference
+
+    cv::Scalar mse = cv::mean(diff.mul(diff)); // Compute Mean Squared Error (MSE)
+    double snr = 10 * log10(pow(cv::norm(originalImage), 2) / mse[0]); // Compute SNR
+
+    return snr;
+}
+
+double computePSNR(const cv::Mat& originalImage, const cv::Mat& equalizedImage)
+{
+    cv::Mat diff;
+    cv::absdiff(originalImage, equalizedImage, diff); // Compute pixel-wise absolute difference
+
+    cv::Scalar mse = cv::mean(diff.mul(diff)); // Compute Mean Squared Error (MSE)
+    double psnr = 10 * log10(pow(255, 2) / mse[0]); // Compute PSNR with a maximum pixel value of 255
+
+    return psnr;
+}
+
 int main()
 {
 	struct ppm_file picture;
+	struct ppm_file tempPpm;
 	int i;
 	get_image_data("mandrill.ppm", &picture);
 	// Information of image
@@ -131,7 +263,21 @@ int main()
 	printf("width...=%d\n", picture.pheader->pwidth);
 	printf("height...=%d\n", picture.pheader->pheight);
 	printf("max gray level...=%d\n", picture.pheader->pmax);
-	equalizeIntensity(picture);
-	write_image("pnr.ppm", &picture);
+
+	cv::Mat originalPicture = ppmToMat(picture);
+	cv::Mat equ = equalizeIntensity(originalPicture);
+	
+	double snr = computeSNR(originalPicture,equ);
+	double psnr = computePSNR(originalPicture,equ);
+	
+	std::cout << "SNR: " << snr << " dB" << std::endl;
+	std::cout << "PSNR: " << psnr << " dB" << std::endl;
+
+	tempPpm = matToPpm(equ);
+	createHistogram(tempPpm);
+
+	// open_window(equ);
+	// print(equ);
+	write_image("pnr.ppm", &tempPpm);
 	return 0;
 }
