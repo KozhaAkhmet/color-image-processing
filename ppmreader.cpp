@@ -1,7 +1,5 @@
 #include <stdio.h>
-// #include<conio.h>
 #include <stdlib.h>
-#include <math.h>
 #include <ctype.h>
 #include <string.h>
 #include <fcntl.h>
@@ -177,37 +175,16 @@ ppm_file matToPpm(const cv::Mat& image)
 
     return ppm;
 }
-
-void open_window(cv::Mat mat){
-	cv::namedWindow("Test", cv::WINDOW_NORMAL);
-	cv::imshow("Test", mat);
-
-	cv::waitKey(0); // Wait for any keystroke in the window
-
-	cv::destroyAllWindows(); //destroy all open windows
-}
-
 void createHistogram(const ppm_file& picture)
 {
-    int histogram[3][256] = {0}; // Initialize the histogram array
+    int histogram[3][256] = {}; // Initialize the histogram array
 
     int size = picture.pheader->pwidth * picture.pheader->pheight;
     for (int i = 0; i < size; ++i)
     {
-        unsigned char pixel = picture.rdata[i];
-        histogram[0][pixel]++;
-    }
-
-    for (int i = 0; i < size; ++i)
-    {
-        unsigned char pixel = picture.gdata[i];
-        histogram[1][pixel]++;
-    }
-
-    for (int i = 0; i < size; ++i)
-    {
-        unsigned char pixel = picture.bdata[i];
-        histogram[2][pixel]++;
+        histogram[0][picture.rdata[i]]++;
+		histogram[1][picture.gdata[i]]++;
+		histogram[2][picture.bdata[i]]++;
     }
 
     FILE* file = fopen("histogram.csv", "w"); // Open the file for writing
@@ -255,29 +232,30 @@ double computePSNR(const cv::Mat& originalImage, const cv::Mat& equalizedImage)
 int main()
 {
 	struct ppm_file picture;
-	struct ppm_file tempPpm;
-	int i;
+	struct ppm_file equPicture;
+
 	get_image_data("mandrill.ppm", &picture);
+
 	// Information of image
 	printf("pgmtype...=%c%c\n", picture.pheader->pgmtype1, picture.pheader->pgmtype2);
 	printf("width...=%d\n", picture.pheader->pwidth);
 	printf("height...=%d\n", picture.pheader->pheight);
 	printf("max gray level...=%d\n", picture.pheader->pmax);
 
-	cv::Mat originalPicture = ppmToMat(picture);
-	cv::Mat equ = equalizeIntensity(originalPicture);
+	cv::Mat originalPictureMat = ppmToMat(picture);
+	cv::Mat equMat = equalizeIntensity(originalPictureMat);
 	
-	double snr = computeSNR(originalPicture,equ);
-	double psnr = computePSNR(originalPicture,equ);
+	double snr = computeSNR(originalPictureMat,equMat);
+	double psnr = computePSNR(originalPictureMat,equMat);
 	
 	std::cout << "SNR: " << snr << " dB" << std::endl;
 	std::cout << "PSNR: " << psnr << " dB" << std::endl;
 
-	tempPpm = matToPpm(equ);
-	createHistogram(tempPpm);
+	equPicture = matToPpm(equMat);
 
-	// open_window(equ);
-	// print(equ);
-	write_image("pnr.ppm", &tempPpm);
+	createHistogram(equPicture);
+	// createHistogram(picture);
+
+	write_image("pnr.ppm", &equPicture);
 	return 0;
 }
