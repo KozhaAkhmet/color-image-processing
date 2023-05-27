@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 2.8)
+project( ColorImageProcess )
+find_package( OpenCV REQUIRED )
+include_directories( ${OpenCV_INCLUDE_DIRS} )
+add_executable( ColorImageProcess ppmreader.cpp )
+target_link_libraries( ColorImageProcess ${OpenCV_LIBS} )
