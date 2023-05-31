@@ -97,7 +97,7 @@ void get_image_data(char *filename, struct ppm_file *image)
 	fclose(fp);
 }
 
-cv::Mat equalizeIntensity(const cv::Mat inputImage)
+cv::Mat equalizeIntensityYcrcb(const cv::Mat inputImage)
 {
 	if (inputImage.channels() >= 3)
 	{
@@ -118,7 +118,67 @@ cv::Mat equalizeIntensity(const cv::Mat inputImage)
 
 	return cv::Mat();
 }
+cv::Mat equalizeIntensityHSI(const cv::Mat bgrImage) {
+    // Convert the input image from BGR to HSI color space
+    cv::Mat hsiImage;
+    cv::cvtColor(bgrImage, hsiImage, cv::COLOR_BGR2HSV);
 
+    // Split the HSI image into separate channels
+    std::vector<cv::Mat> hsiChannels;
+    cv::split(hsiImage, hsiChannels);
+
+    // Equalize the intensity channel
+    cv::equalizeHist(hsiChannels[2], hsiChannels[2]);
+
+    // Merge the channels back into a single HSI image
+    cv::merge(hsiChannels, hsiImage);
+
+    // Convert the HSI image back to BGR color space
+    cv::Mat equalizedBgrImage;
+    cv::cvtColor(hsiImage, equalizedBgrImage, cv::COLOR_HSV2BGR);
+
+    return equalizedBgrImage;
+}
+/*
+cv::Mat equalizeIntensityHSI(const cv::Mat bgrImage) {
+    cv::Mat hsiImage;
+    cv::cvtColor(bgrImage, hsiImage, cv::COLOR_BGR2HSV);  // Convert BGR image to HSI
+
+    // Split the HSI image into individual channels
+    std::vector<cv::Mat> channels;
+    cv::split(hsiImage, channels);
+    cv::Mat intensityChannel = channels[2];
+
+    // Normalize intensity channel to [0, 1] range
+    cv::Mat intensityNormalized;
+    intensityChannel.convertTo(intensityNormalized, CV_32F, 1.0 / 255.0);
+
+    double mean = cv::mean(intensityNormalized)[0];
+    double targetMean = 0.5;
+    double theta = log(targetMean) / log(mean);
+	
+    // Check if theta is less than 1
+    if (theta < 1.0) {
+        cv::pow(intensityNormalized, theta, intensityNormalized);
+    }
+	std::cout << "Theta: " << theta << std::endl;
+
+    // Convert intensity channel back to [0, 255] range
+    cv::Mat intensityEqualized;
+    intensityNormalized.convertTo(intensityEqualized, CV_8U, 255.0);
+
+    // Replace the original intensity channel with the equalized one
+    channels[2] = intensityEqualized;
+
+    // Merge the HSI channels back into a single image
+    cv::Mat equalizedHSI;
+    cv::merge(channels, equalizedHSI);
+
+    cv::Mat equalizedImage;
+    cv::cvtColor(equalizedHSI, equalizedImage, cv::COLOR_HSV2BGR);  // Convert HSI image back to BGR
+
+    return equalizedImage;
+}*/
 
 cv::Mat ppmToMat(const struct ppm_file& ppmImage) {
     cv::Mat matImage;
@@ -175,7 +235,7 @@ ppm_file matToPpm(const cv::Mat& image)
 
     return ppm;
 }
-void createHistogram(const ppm_file& picture)
+void createHistogram(const ppm_file& picture, std::string name)
 {
     int histogram[3][256] = {}; // Initialize the histogram array
 
@@ -186,8 +246,8 @@ void createHistogram(const ppm_file& picture)
 		histogram[1][picture.gdata[i]]++;
 		histogram[2][picture.bdata[i]]++;
     }
-
-    FILE* file = fopen("histogram.csv", "w"); // Open the file for writing
+	std::string filename = name + ".csv";
+    FILE* file = fopen(filename.c_str(), "w"); // Open the file for writing
 
     if (file != NULL)
     {
@@ -213,6 +273,9 @@ double computeSNR(const cv::Mat& originalImage, const cv::Mat& equalizedImage)
     cv::absdiff(originalImage, equalizedImage, diff); // Compute pixel-wise absolute difference
 
     cv::Scalar mse = cv::mean(diff.mul(diff)); // Compute Mean Squared Error (MSE)
+	std::cout << "Norm: " << cv::norm(originalImage) << std::endl;
+	std::cout << "Mean: " << cv::mean(diff.mul(diff)) << std::endl;
+
     double snr = 10 * log10(pow(cv::norm(originalImage), 2) / mse[0]); // Compute SNR
 
     return snr;
@@ -242,20 +305,41 @@ int main()
 	printf("height...=%d\n", picture.pheader->pheight);
 	printf("max gray level...=%d\n", picture.pheader->pmax);
 
+	
 	cv::Mat originalPictureMat = ppmToMat(picture);
-	cv::Mat equMat = equalizeIntensity(originalPictureMat);
+
+	// Equalization
+
+	// ---- Ycrcb ----
+	std::cout << "------ YRCRCB ------" << std::endl;
+	cv::Mat equYcrcbMat = equalizeIntensityYcrcb(originalPictureMat);
+
+	double snrYcrcb = computeSNR(originalPictureMat,equYcrcbMat);
+	double psnrYcrcb = computePSNR(originalPictureMat,equYcrcbMat);
+
+	std::cout << "SNR: " << snrYcrcb << " dB" << std::endl;
+	std::cout << "PSNR: " << psnrYcrcb << " dB" << std::endl;
 	
-	double snr = computeSNR(originalPictureMat,equMat);
-	double psnr = computePSNR(originalPictureMat,equMat);
+	ppm_file equYcrcbPicture = matToPpm(equYcrcbMat);
+
+	// ---- HSI -----
+	std::cout << "------- HSI -------" << std::endl;
+	cv::Mat equHsiMat = equalizeIntensityHSI(originalPictureMat);
 	
-	std::cout << "SNR: " << snr << " dB" << std::endl;
-	std::cout << "PSNR: " << psnr << " dB" << std::endl;
+	double snrHsi = computeSNR(originalPictureMat,equHsiMat);
+	double psnrHsi = computePSNR(originalPictureMat,equHsiMat);
 
-	equPicture = matToPpm(equMat);
+	std::cout << "SNR: " << snrHsi<< " dB" << std::endl;
+	std::cout << "PSNR: " << psnrHsi << " dB" << std::endl;
 
-	createHistogram(equPicture);
-	// createHistogram(picture);
+	ppm_file equHciPicture = matToPpm(equHsiMat);
 
-	write_image("pnr.ppm", &equPicture);
+	// Histograms
+	createHistogram(equYcrcbPicture,"Ycrcb");
+	createHistogram(equHciPicture,"Hsi");
+
+	write_image("Ycrcb.ppm", &equYcrcbPicture);
+	write_image("Hci.ppm", &equHciPicture);
+
 	return 0;
 }
