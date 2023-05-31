@@ -259,7 +259,7 @@ void createHistogram(const ppm_file& picture, std::string name)
         }
 
         fclose(file); // Close the file
-        printf("Histogram data written to histogram.csv\n");
+        printf("Histogram data written to %s.csv\n", filename.c_str());
     }
     else
     {
