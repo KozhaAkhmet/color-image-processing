@@ -139,46 +139,6 @@ cv::Mat equalizeIntensityHSI(const cv::Mat bgrImage) {
 
     return equalizedBgrImage;
 }
-/*
-cv::Mat equalizeIntensityHSI(const cv::Mat bgrImage) {
-    cv::Mat hsiImage;
-    cv::cvtColor(bgrImage, hsiImage, cv::COLOR_BGR2HSV);  // Convert BGR image to HSI
-
-    // Split the HSI image into individual channels
-    std::vector<cv::Mat> channels;
-    cv::split(hsiImage, channels);
-    cv::Mat intensityChannel = channels[2];
-
-    // Normalize intensity channel to [0, 1] range
-    cv::Mat intensityNormalized;
-    intensityChannel.convertTo(intensityNormalized, CV_32F, 1.0 / 255.0);
-
-    double mean = cv::mean(intensityNormalized)[0];
-    double targetMean = 0.5;
-    double theta = log(targetMean) / log(mean);
-	
-    // Check if theta is less than 1
-    if (theta < 1.0) {
-        cv::pow(intensityNormalized, theta, intensityNormalized);
-    }
-	std::cout << "Theta: " << theta << std::endl;
-
-    // Convert intensity channel back to [0, 255] range
-    cv::Mat intensityEqualized;
-    intensityNormalized.convertTo(intensityEqualized, CV_8U, 255.0);
-
-    // Replace the original intensity channel with the equalized one
-    channels[2] = intensityEqualized;
-
-    // Merge the HSI channels back into a single image
-    cv::Mat equalizedHSI;
-    cv::merge(channels, equalizedHSI);
-
-    cv::Mat equalizedImage;
-    cv::cvtColor(equalizedHSI, equalizedImage, cv::COLOR_HSV2BGR);  // Convert HSI image back to BGR
-
-    return equalizedImage;
-}*/
 
 cv::Mat ppmToMat(const struct ppm_file& ppmImage) {
     cv::Mat matImage;
